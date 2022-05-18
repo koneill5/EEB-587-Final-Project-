@@ -20,7 +20,7 @@ library(ggtree)
 if (!require("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 BiocManager::install("ggtree")
-
+library(dplyr)
 
 #Use the following tree:
 #Downloaded from the 10k Trees Primates program 
@@ -104,9 +104,27 @@ taxa_index <- seq(possible_taxa){
 
 phy_pruned <- geiger::drop.random(primate.tree2, n=ape::Ntip(primate.tree2) - possible_taxa)
 str(phy_pruned)
+phy_pruned$tip.label
 treedata(phy_pruned, sim.traits)
-pruned_all <- geiger::treedata(phy_pruned, sim.traits)
-geiger_results <- geiger::fitContinuous(phy_pruned$primate.tree2, dat=primate.data.edited)
+pruned_all <- geiger::treedata(phy_pruned, sim.traits,warnings = TRUE) #error for incorrect dimensions, need to subset the specific taxa named in pruned? 
+geiger_results_test <- geiger::fitContinuous(phy_pruned$primate.tree2, dat=data.primate1)
+
+results <- data.frame()
+for (covar_index in seq(length(possible_covar))){
+  for (sigma_index in seq(length(test1_sigma))) {
+    for (replicate_index in seq(10)) {
+      covar_matrix <- matrix(test1_sigma[sigma_index], nrow=2, ncol=2)
+      covar_matrix[1,2] <- possible_covar[covar_index]
+      covar_matrix[2,1] <- covar_matrix[1,2]
+      sim.traits <- sim.char(primate.tree2, par = covar_matrix, model= "BM", nsim= 100)
+      for (taxa_index in seq(possible_taxa)) {
+        geiger_results<- geiger::fitContinuous(primate.tree2,sim.traits)
+        
+      }
+    }
+    
+  }
+}
 
 local.results <- data.frame(
   covariation=possible_covar[covar_index],
@@ -114,10 +132,11 @@ local.results <- data.frame(
   ntip=possible_taxa[taxa_index],
   estimated.covar=
 )
+
 #### Next section ####
 
 # 5. Figure out the likelihood 
-BM.fit.lik <- fitContinuous(phy=primate.tree2, dat=data.primate1, SE=NA, control = list(niter=50), ncores = 2)
+BM.fit.lik <- fitContinuous(phy=primate.tree2, dat=data.primate1) #error tree should be binary 
 bm2 <- fitContinuous(phy=primate.tree2, dat=primate.data.edited, SE=NA, control = list(niter=50), ncores = 2)
 
 hl <- setNames(data.primate1$data.T1, rownames(data.primate1))
@@ -197,14 +216,6 @@ for (i in 1:length(ve)) {
 
 colMeans(K)
 boxplot()
-
-#Don't actually need:
-testprime <- primate.tree2
-d1 <- data.frame(id=testprime$tip.label, val=primate.data.edited[,2])
-p2 <- facet_plot(testprime, panel= "dot", data=d1, geom=geom_point, aes(x=val), color='red3')
-d2 <- data.frame(id=primate.tree2$tip.label, value=primate.data.edited[,3])
-p3 <- facet_plot(p2, panel = 'bar', data = d2, geom = geom_segment, aes(x=0, xend=value, y=y, yend=y), size =3, color='blue4')
-p3 + theme_tree2()
 
 
 ##Projecting a continuous trait onto the branches of a tree using variable edge widths
