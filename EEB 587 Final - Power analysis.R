@@ -215,7 +215,7 @@ for (i in 1:length(ve)) {
 }
 
 colMeans(K)
-boxplot()
+boxplot(K, xlab="Sample size (number of taxa" , ylab="sigma2 variance")
 
 
 ##Projecting a continuous trait onto the branches of a tree using variable edge widths
