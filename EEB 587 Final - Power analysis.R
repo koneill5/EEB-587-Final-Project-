@@ -162,7 +162,8 @@ local.results <- data.frame(
 
 # 5. Figure out the likelihood and # 6. Analyze the simulations 
 BM.fit.lik <- fitContinuous(phy=better_tree, dat=hl)
-bm2 <- fitContinuous(phy=better_tree, dat=hl, SE=NA, control = list(niter=50), ncores = 2)
+bm2 <- fitContinuous(phy=better_tree, dat=hl, SE=NA, bounds = list(sigsq=c(min=exp(0.01),max=exp(0.05))), control = list(niter=50), ncores = 2)
+print(bm2)
 
 
 #Computer phylogenetic signal with two methods:
@@ -335,7 +336,6 @@ plot(primate.tree2)
 primate.tree3$tip.label
 primate.tree3$edge
 str(primate.tree3)
-
 
 
 
