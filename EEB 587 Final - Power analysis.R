@@ -31,6 +31,13 @@ primate.tree2$edge
 str(primate.tree2) #structure of the tree
 primate.tree2$tip.label #vector of names 
 
+is.binary(primate.tree2)
+is.ultrametric(primate.tree2)
+is.rooted(primate.tree2)
+multi2di(primate.tree2)
+
+better_tree <- ape::multi2di(primate.tree2)
+is.binary(better_tree)
 
 #### Next Section ####
 
@@ -86,15 +93,32 @@ covar_matrix[2,1] <- covar_matrix[1,2]
 traits <- sim.char(primate.tree2, nsim = 1, model = c("BM"), root=1)
 sim.traits <- sim.char(primate.tree2, par = covar_matrix, model= "BM", nsim= 100)## Issues with this code, error in match.arg / starting at 0 by default 
 head(sim.traits)
+plot(sim.traits)
 
-sim.trait.fitC <- fitContinuous(phy=primate.tree2,dat=data.primate1,SE=NA, control = list(niter=10), ncores = 2)# error 'phy' is not a binary tree
+sim.traits <- setNames(sim.traits, rownames(sim.traits))
 
-is.binary(primate.tree2)
-is.ultrametric(primate.tree2)
-is.rooted(primate.tree2)
-multi2di(primate.tree2)
+sim.2 <- sim.char(better_tree, par = covar_matrix, model = "BM", nsim = 301)
+plot(sim.2)
 
-## Work on this section: 
+
+
+# fitContinuous tries:
+head(sort(names(better_tree)))
+sim.trait.fitC <- fitContinuous(phy=better_tree,dat=data.primate1$data.T1,SE=NA, control = list(niter=10), ncores = 2)# error 'phy' is not a binary tree
+class(data.primate1$data.T1)
+data.primate1$data.T1 = as.integer(data.primate1$data.T1)
+data.primate1$data.T2 = as.integer(data.primate1$data.T2)
+class(data.primate1$data.T1)
+class(data.primate1$data.T2)
+sim.fitC <- fitContinuous(ape::multi2di(primate.tree2),data.primate1$data.T1)
+
+all.things = treedata(better_tree,data.primate1)
+phy.2 <- all.things$phy
+dat.2 <- all.things$data
+fittest <- fitContinuous(phy.2, dat.2[,"data.T1"], SE=NA, control = list(niter=50), ncores = 2)
+
+
+  ## Work on this section: 
 taxa_index <- seq(possible_taxa){
   pruned.tree <- geiger::drop.random(primate.tree2, n=ape::Ntip(primate.tree2) - possible_taxa[taxa_index])
   pruned.tree.all <- geiger::treedata(pruned.tree, traits)
@@ -105,7 +129,8 @@ taxa_index <- seq(possible_taxa){
 phy_pruned <- geiger::drop.random(primate.tree2, n=ape::Ntip(primate.tree2) - possible_taxa)
 str(phy_pruned)
 phy_pruned$tip.label
-treedata(phy_pruned, sim.traits)
+treedata(better_tree, sim.traits)
+
 pruned_all <- geiger::treedata(phy_pruned, sim.traits,warnings = TRUE) #error for incorrect dimensions, need to subset the specific taxa named in pruned? 
 geiger_results_test <- geiger::fitContinuous(phy_pruned$primate.tree2, dat=data.primate1)
 
@@ -116,13 +141,11 @@ for (covar_index in seq(length(possible_covar))){
       covar_matrix <- matrix(test1_sigma[sigma_index], nrow=2, ncol=2)
       covar_matrix[1,2] <- possible_covar[covar_index]
       covar_matrix[2,1] <- covar_matrix[1,2]
-      sim.traits <- sim.char(primate.tree2, par = covar_matrix, model= "BM", nsim= 100)
+      sim.traits <- sim.char(better_tree, par = covar_matrix, model= "BM", nsim= 100)
       for (taxa_index in seq(possible_taxa)) {
-        geiger_results<- geiger::fitContinuous(primate.tree2,sim.traits)
-        
+        geiger_results<- geiger::fitContinuous(better_tree,sim.traits)
       }
     }
-    
   }
 }
 
@@ -130,29 +153,60 @@ local.results <- data.frame(
   covariation=possible_covar[covar_index],
   true.sigma=test1_sigma[sigma_index],
   ntip=possible_taxa[taxa_index],
-  estimated.covar=
+  estimated.covar=geiger_results_test$opt
+  estimated_sigma_squared=geiger_results_test$opt
+  replicate_number=replicate_index
 )
 
 #### Next section ####
 
-# 5. Figure out the likelihood 
-BM.fit.lik <- fitContinuous(phy=primate.tree2, dat=data.primate1) #error tree should be binary 
-bm2 <- fitContinuous(phy=primate.tree2, dat=primate.data.edited, SE=NA, control = list(niter=50), ncores = 2)
+# 5. Figure out the likelihood and # 6. Analyze the simulations 
+BM.fit.lik <- fitContinuous(phy=better_tree, dat=hl)
+bm2 <- fitContinuous(phy=better_tree, dat=hl, SE=NA, control = list(niter=50), ncores = 2)
+
+
+#Computer phylogenetic signal with two methods:
+
+all.things = treedata(better_tree,data.primate1)
+phy.2 <- all.things$phy
+dat.2 <- all.things$data
 
 hl <- setNames(data.primate1$data.T1, rownames(data.primate1))
-
-
 cl <- setNames(data.primate1$data.T2, rownames(data.primate1))
-k.hl <- phylosig(primate.tree2,hl,method = "K", test = FALSE, nsim = 100)
-k.cl <- phylosig(primate.tree2, cl, method = "K", )
 
-l.hl <- phylosig(primate.tree2, hl, method = "lambda", test = TRUE)
+k.hl <- phylosig(better_tree,hl,method = "K", test = FALSE, nsim=1000)
+print(k.hl)
+plot(k.hl)
+
+k.cl <- phylosig(better_tree,cl, method = "K", test = FALSE, nsim=1000)
+print(k.cl)
+plot(k.cl)
+
+l.hl <- phylosig(better_tree, hl, method = "lambda", test = TRUE)
+print(l.hl)
+plot(l.hl)
+
+l.cl <- phylosig(better_tree,cl,method = "lambda", test = TRUE)
+print(l.cl)
+plot(l.cl)
+
+fct.hl <- fitContinuous(better_tree,hl)
+print(names(fct.hl))
+print(fct.hl)
+fct.hl$opt
 
 
-#### Next section ####
+fct.cl <- fitContinuous(better_tree,cl)
+print(names(fct.cl))
+print(fct.cl)
+fct.cl$opt
 
-# 6. Analyze the simulations 
-#Create simulations
+flik.hl=fct.hl$lik
+print(argn(flik.hl))
+
+flik.cl=fct.cl$lik
+print(argn(flik.cl))
+
 
 ## Tests with out using the tree and data:
 t<-0:100 #This sets the length of time for the simulation / number of generations 
@@ -197,38 +251,77 @@ apply(sim_matrix[2:nsim, ], 1, function(x, t) lines(t, x), t = t)
 lines(t, sim_matrix[1, ], xlab = "time", ylab = "phenotype", ylim = c(-3, 3), col = "red") # the red is the first simulation run. 
 
 
-
-#### Next section ####
-
 # 7. Visualize 
 ## box plots are okay 
+N<-50
+t <- fastBM(better_tree,nsim = 10)
+fn <- function(better_tree,x,sampling.var){
+  foo<-function()rep(sampling.var,N)/sample(1:5,size=N,replace=TRUE)
+  v<-replicate(nsim,foo(),simplify=FALSE)
+  foo<-function(x,v) mapply(sampleFrom,xbar=x,xvar=v)
+  mapply(foo,x=x,v=v,SIMPLIFY=FALSE)
+}
 
 ve <- seq(0,0.4,by=0.05) #this is going to test different sigma2
 K <- lambda <- matrix(NA,nsim,length(ve),dimnames = list(NULL,ve))
 xe <- list()
 for (i in 1:length(ve)) {
-  xe[[i]]<-fn(primate.tree2,data.primate1,ve[i])
-  K[,i]<-mapply(phylosig,tree=primate.tree2,x=xe[[i]])
-  foo<-function(primate.tree2,data.primate1) phylosig(primate.tree2,data.primate1,method = "lambda")$lambda
-  lambda[,i]<-mapply(foo,tree=primate.tree2,x=xe[[i]])
-  
+  xe[[i]]<-fn(better_tree,hl,ve[i])
+  K[,i]<-mapply(phylosig,tree=better_tree,x=xe[[i]])
+  foo<-function(better_tree,hl) phylosig(better_tree,hl,method = "lambda")$lambda
+  lambda[,i]<-mapply(foo,tree=better_tree,x=xe[[i]])
 }
 
 colMeans(K)
-boxplot(K, xlab="Sample size (number of taxa" , ylab="sigma2 variance")
+boxplot(K, xlab="Sample size (number of taxa)" , ylab="sigma2 variance")
 
+boxplot(horn.length)
 
 ##Projecting a continuous trait onto the branches of a tree using variable edge widths
 #Map continuous traits on the tree 
-
 horn.length <- setNames(data.primate1$data.T1, row.names(data.primate1))
-object.plot <- edge.widthMap(primate.tree2,horn.length, min.width=0.05)
-plot(object.plot, legend = "horn length")
+object.plot <- edge.widthMap(better_tree,horn.length, min.width=0.05)
+plot(object.plot, border=1.5, color=palette()[2], legend = "horn length")
+
+clav.length <- setNames(data.primate1$data.T2, rownames(data.primate1))
+obj.plot2 <- edge.widthMap(better_tree,clav.length, min.width=0.05)
+plot(obj.plot2, border=1.5, color=palette()[5], legend = "clavicle length")
+
 #### Next section ####
-
-
 #Contmap 
-primate.contmap <- contMap(primate.tree2, horn.length)
+primate.contmap.horn <- contMap(better_tree, horn.length)
+plot(primate.contmap.horn, fsize=c(0.7,0.8), leg.txt="horn length")
+par(mar=c(5.1,4.1,4.1,2.1))
+primate.contmap.clav <- contMap(better_tree,clav.length)
+plot(primate.contmap.clav, fsize=c(0.7,0.8), leg.txt="clavicle length")
+par(mar=c(5.1,4.1,4.1,2.1))
+
+all.things = treedata(better_tree,data.primate1)
+phy.2 <- all.things$phy
+dat.2 <- all.things$data
+
+test.frame <- setNames(all.things$phy,all.things$data)
+
+par(mfrow=c(1,2))
+plotTree(better_tree,mar=c(5.1,1.1,2.1,0.1))
+par(mar=c(5.1,0.1,2.1,1.1))
+boxplot(horn.length~factor(names(horn.length),levels = better_tree$tip.label), horizontal = TRUE, axes=FALSE, xlim=c(1,Ntip(better_tree)))
+axis(1)
+title(xlab = "horn length")
+
+par(mfrow=c(1,2))
+plotTree(better_tree,mar=c(5.1,1.1,2.1,0.1))
+par(mar=c(5.1,0.1,2.1,1.1))
+boxplot(clav.length~factor(names(clav.length),levels = better_tree$tip.label), horizontal = TRUE, axes=FALSE, xlim=c(1,Ntip(better_tree)))
+axis(1)
+title(xlab = "clavicle length")
+
+
+
+data.primate1
+op <- par(no.readonly = TRUE)
+par(mfrow=c(1,2))
+with(data.primate1, plot(data.primate1$V1,data.primate1$data.T1))
 
 # 8. Decide the minimum number of taxa needed/appropriate 
 
