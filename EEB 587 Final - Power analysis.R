@@ -106,11 +106,14 @@ plot(sim.2)
 head(sort(names(better_tree)))
 sim.trait.fitC <- fitContinuous(phy=better_tree,dat=data.primate1$data.T1,SE=NA, control = list(niter=10), ncores = 2)# error 'phy' is not a binary tree
 class(data.primate1$data.T1)
-data.primate1$data.T1 = as.integer(data.primate1$data.T1)
-data.primate1$data.T2 = as.integer(data.primate1$data.T2)
+data.primate1$data.T1 = as.numeric(data.primate1$data.T1)
+data.primate1$data.T2 = as.numeric(data.primate1$data.T2)
+rownames(data.primate1) <- data.primate1$V1
 class(data.primate1$data.T1)
 class(data.primate1$data.T2)
-sim.fitC <- fitContinuous(ape::multi2di(primate.tree2),data.primate1$data.T1)
+dataT1 <- data.primate1$data.T1
+names(dataT1) <- data.primate1$V1
+sim.fitC <- fitContinuous(ape::multi2di(primate.tree2),dataT1)
 
 all.things = treedata(better_tree,data.primate1)
 phy.2 <- all.things$phy
@@ -121,29 +124,55 @@ fittest <- fitContinuous(phy.2, dat.2[,"data.T1"], SE=NA, control = list(niter=5
   ## Work on this section: 
 taxa_index <- seq(possible_taxa){
   pruned.tree <- geiger::drop.random(primate.tree2, n=ape::Ntip(primate.tree2) - possible_taxa[taxa_index])
-  pruned.tree.all <- geiger::treedata(pruned.tree, sim.traits)
+  pruned.tree.all <- geiger::treedata(pruned.tree, sim.traits[,,1])
   geiger.tree.results <- geiger::fitContinuous(pruned.tree.all$phy, dat = pruned.tree.all$data)
 }
 
 
-phy_pruned <- geiger::drop.random(primate.tree2, n=ape::Ntip(primate.tree2) - possible_taxa)
-str(phy_pruned)
-phy_pruned$tip.label
-treedata(better_tree, sim.traits)
+# simulate traits 
 
-pruned_all <- geiger::treedata(phy_pruned, sim.traits,warnings = TRUE) #error for incorrect dimensions, need to subset the specific taxa named in pruned? 
-geiger_results_test <- geiger::fitContinuous(phy_pruned$primate.tree2, dat=data.primate1)
+sim.traits <- sim.char(primate.tree2, par = covar_matrix, model= "BM", nsim= 100)
+# for each simulaiton run
+  
+  # for each possible number of taxa to include
+    # prune the tree to those taxa
+    # fitContinuous()
+    # store the result somewhere
+  # }
+# }
+
+
 
 results <- data.frame()
-for (covar_index in seq(length(possible_covar))){
-  for (sigma_index in seq(length(test1_sigma))) {
-    for (replicate_index in seq(10)) {
+for (covar_index in sequence(length(possible_covar))){
+  for (sigma_index in sequence(length(test1_sigma))) {
+    for (replicate_index in sequence(10)) {
       covar_matrix <- matrix(test1_sigma[sigma_index], nrow=2, ncol=2)
       covar_matrix[1,2] <- possible_covar[covar_index]
       covar_matrix[2,1] <- covar_matrix[1,2]
       sim.traits <- sim.char(better_tree, par = covar_matrix, model= "BM", nsim= 100)
-      for (taxa_index in seq(possible_taxa)) {
-        geiger_results<- geiger::fitContinuous(better_tree,sim.traits)
+      # for each simulaiton run
+      for (sim_index in sequence(dim(sim.traits)[3])) {
+        sim.trait.this.rep <- sim.traits[,,sim_index]
+        for (taxa_index in sequence(length(possible_taxa))) {
+          ntax_to_keep <- possible_taxa[taxa_index]
+          phy_pruned <- geiger::drop.random(better_tree, n=ape::Ntip(better_tree) - ntax_to_keep)
+
+          pruned_all <- geiger::treedata(phy_pruned, sim.trait.this.rep,warnings = FALSE) #error for incorrect dimensions, need to subset the specific taxa named in pruned? 
+          dummy_tips <- c(0,rep(1, ape::Ntip(pruned_all$phy)-1))
+          names(dummy_tips) <- pruned_all$phy$tip.label
+          pruned_all_simmap <- phytools::make.simmap(pruned_all$phy, x=dummy_tips)
+          for (i in sequence(length(pruned_all_simmap$maps))) {
+            pruned_all_simmap$maps[[i]] <- sum(pruned_all_simmap$maps[[i]])
+            names(pruned_all_simmap$maps[[i]]) <- 1
+          }
+          pruned_all_simmap$mapped.edge[,2] <- rowSums(pruned_all_simmap$mapped.edge)
+          pruned_all_simmap$mapped.edge[,1] <- 0
+          vcv_result <- evol.vcv(pruned_all_simmap, pruned_all$data)
+         # geiger_result <- geiger::fitContinuous(pruned_all$phy, dat=pruned_all$data)
+          results <- rbind(results, data.frame(ntax=ntax_to_keep, sigma11=covar_matrix[1,1], sigma12=covar_matrix[1,2], sigma21=covar_matrix[2,1], sigma22=covar_matrix[2,2], replicate=replicate_index, sim=sim_index, estimated11=vcv_result$R.single[1,1], estimated12=vcv_result$R.single[1,2], estimated21=vcv_result$R.single[2,1], estimated22=vcv_result$R.single[2,2], logL1=vcv_result$logL1 ))
+          print(tail(results,1))
+        }
       }
     }
   }
