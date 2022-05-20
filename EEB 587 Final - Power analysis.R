@@ -121,7 +121,7 @@ fittest <- fitContinuous(phy.2, dat.2[,"data.T1"], SE=NA, control = list(niter=5
   ## Work on this section: 
 taxa_index <- seq(possible_taxa){
   pruned.tree <- geiger::drop.random(primate.tree2, n=ape::Ntip(primate.tree2) - possible_taxa[taxa_index])
-  pruned.tree.all <- geiger::treedata(pruned.tree, traits)
+  pruned.tree.all <- geiger::treedata(pruned.tree, sim.traits)
   geiger.tree.results <- geiger::fitContinuous(pruned.tree.all$phy, dat = pruned.tree.all$data)
 }
 
@@ -161,10 +161,6 @@ local.results <- data.frame(
 #### Next section ####
 
 # 5. Figure out the likelihood and # 6. Analyze the simulations 
-BM.fit.lik <- fitContinuous(phy=better_tree, dat=hl)
-bm2 <- fitContinuous(phy=better_tree, dat=hl, SE=NA, bounds = list(sigsq=c(min=exp(0.01),max=exp(0.05))), control = list(niter=50), ncores = 2)
-print(bm2)
-
 
 #Computer phylogenetic signal with two methods:
 
@@ -251,6 +247,10 @@ plot(t, sim_matrix[1, ], xlab = "time", ylab = "phenotype", ylim = c(-3, 3), typ
 apply(sim_matrix[2:nsim, ], 1, function(x, t) lines(t, x), t = t)
 lines(t, sim_matrix[1, ], xlab = "time", ylab = "phenotype", ylim = c(-3, 3), col = "red") # the red is the first simulation run. 
 
+
+BM.fit.lik <- fitContinuous(phy=better_tree, dat=hl)
+bm2 <- fitContinuous(phy=better_tree, dat=hl, SE=NA, bounds = list(sigsq=c(min=exp(0.01),max=exp(0.05))), control = list(niter=50), ncores = 2)
+print(bm2)
 
 # 7. Visualize 
 ## box plots are okay 
