@@ -95,10 +95,6 @@ sim.traits <- sim.char(primate.tree2, par = covar_matrix, model= "BM", nsim= 100
 head(sim.traits)
 plot(sim.traits)
 
-sim.traits <- setNames(sim.traits, rownames(sim.traits))
-
-sim.2 <- sim.char(better_tree, par = covar_matrix, model = "BM", nsim = 301)
-plot(sim.2)
 
 
 
@@ -178,14 +174,6 @@ for (covar_index in sequence(length(possible_covar))){
   }
 }
 
-local.results <- data.frame(
-  covariation=possible_covar[covar_index],
-  true.sigma=test1_sigma[sigma_index],
-  ntip=possible_taxa[taxa_index],
-  estimated.covar=geiger_results_test$opt
-  estimated_sigma_squared=geiger_results_test$opt
-  replicate_number=replicate_index
-)
 
 #### Next section ####
 
@@ -234,42 +222,6 @@ flik.cl=fct.cl$lik
 print(argn(flik.cl))
 
 
-## Tests with out using the tree and data:
-t<-0:100 #This sets the length of time for the simulation / number of generations 
-
-sig2 <- 0.01 #This determines the relative size of jumps on the tree. When sigma squared is small, character changes tend to be smaller. Sigma squared has a maximum of 1, which suggests larger character changes. 
-
-random.deviates.simulation <- rnorm(n=length(t) -1, sd=sqrt(sig2)) #This is the series of character state changes through time
-
-stepwise_values <- numeric() # Generating trait values over time
-stepwise_values[1] <-0 # Each trait value at time t is calculated by adding a change in trait value given in the vector to the trait value at t-1. Character state begins at 0. 
-stepwise_values[2] <- stepwise_values[1] + random.deviates.simulation[1]
-stepwise_values[3] <- stepwise_values[2] + random.deviates.simulation[2]
-stepwise_values[4] <- stepwise_values[3] + random.deviates.simulation[3]
-stepwise_values[5] <- stepwise_values[4] + random.deviates.simulation[4]
-
-
-#Plot the trait values for the first 5 changes in time described above. 
-abs_max <- max(abs(stepwise_values))
-plot(1, stepwise_values[1], 
-     xlim = c(0,5), ylim = c(-abs_max,abs_max),
-     xlab = "t", ylab = "trait value",
-     pch = 20, type = "o")
-
-points(c(2:5), stepwise_values[2:5], pch=20)
-
-lines(1:5, stepwise_values)
-
-# Do this for all the values of x:
-random.deviates.simulation <- c(0, cumsum(random.deviates.simulation))
-plot(t, random.deviates.simulation, type = "l", ylim = c(-3, 3))
-
-# Change the values of t and sigma squared:
-t <- 0:100
-sig2 <- 0.01
-nsim <- 100
-X <- matrix(rnorm(n = nsim * (length(t) - 1), sd = sqrt(sig2)), nsim, length(t) - 1)
-sim_matrix <- cbind(rep(0, nsim), t(apply(X, 1, cumsum))) #matrix of simulations
 
 # Plot simulations:
 plot(t, sim_matrix[1, ], xlab = "time", ylab = "phenotype", ylim = c(-3, 3), type = "l")
@@ -353,6 +305,10 @@ op <- par(no.readonly = TRUE)
 par(mfrow=c(1,2))
 with(data.primate1, plot(data.primate1$V1,data.primate1$data.T1))
 
+boxplot(results)
+
+
+
 # 8. Decide the minimum number of taxa needed/appropriate 
 
 
@@ -366,13 +322,101 @@ primate.tree3$tip.label
 primate.tree3$edge
 str(primate.tree3)
 
+is.binary(primate.tree3)
+bin.prim.tree.3 <- ape::multi2di(primate.tree3)
+is.binary(bin.prim.tree.3)
+
+
+results2 <- data.frame()
+for (covar_index in sequence(length(possible_covar))){
+  for (sigma_index in sequence(length(test1_sigma))) {
+    for (replicate_index in sequence(10)) {
+      covar_matrix <- matrix(test1_sigma[sigma_index], nrow=2, ncol=2)
+      covar_matrix[1,2] <- possible_covar[covar_index]
+      covar_matrix[2,1] <- covar_matrix[1,2]
+      sim.traits2 <- sim.char(bin.prim.tree.3, par = covar_matrix, model= "BM", nsim= 100)
+      # for each simulation run
+      for (sim_index in sequence(dim(sim.traits2)[3])) {
+        sim.trait.this.rep2 <- sim.traits2[,,sim_index]
+        for (taxa_index in sequence(length(possible_taxa))) {
+          ntax_to_keep <- possible_taxa[taxa_index]
+          phy_pruned2 <- geiger::drop.random(bin.prim.tree.3, n=ape::Ntip(bin.prim.tree.3) - ntax_to_keep)
+          
+          pruned_all2 <- geiger::treedata(phy_pruned2, sim.trait.this.rep2,warnings = FALSE) #error for incorrect dimensions, in this case there is a third dimension that isn't being accounted for, need to do the simmap function to correct it.  
+          dummy_tips2 <- c(0,rep(1, ape::Ntip(pruned_all2$phy)-1))
+          names(dummy_tips2) <- pruned_all2$phy$tip.label
+          pruned_all_simmap2 <- phytools::make.simmap(pruned_all2$phy, x=dummy_tips2)
+          for (i in sequence(length(pruned_all_simmap2$maps))) {
+            pruned_all_simmap2$maps[[i]] <- sum(pruned_all_simmap2$maps[[i]])
+            names(pruned_all_simmap2$maps[[i]]) <- 1
+          }
+          pruned_all_simmap2$mapped.edge[,2] <- rowSums(pruned_all_simmap2$mapped.edge)
+          pruned_all_simmap2$mapped.edge[,1] <- 0
+          vcv_result2 <- evol.vcv(pruned_all_simmap2, pruned_all2$data)
+          # geiger_result <- geiger::fitContinuous(pruned_all$phy, dat=pruned_all$data)
+          results2 <- rbind(results2, data.frame(ntax=ntax_to_keep, sigma11=covar_matrix[1,1], sigma12=covar_matrix[1,2], sigma21=covar_matrix[2,1], sigma22=covar_matrix[2,2], replicate=replicate_index, sim=sim_index, estimated11=vcv_result$R.single[1,1], estimated12=vcv_result$R.single[1,2], estimated21=vcv_result$R.single[2,1], estimated22=vcv_result$R.single[2,2], logL1=vcv_result$logL1 ))
+          print(tail(results2,1))
+        }
+      }
+    }
+  }
+}
+
+r2.output = data.frame()
+for (i in seq_len(nrow(results2))) {
+  if (i in 1:30){
+    output2 = c(i^3+3, i^2+2, i+1)
+    df = rbind(r2.output, output)
+  }
+}
+
+plot(results2)
+boxplot(results2)
+boxplot(results2, main = "boxplot(*, horizontal = FALSE)", horizontal = FALSE)
+### Results - the first tree (better_tree) reports that 30 taxa are optimum, while the second tree (bin.prim.tree.3) reports that 150 are optimum.    
 
 
 
 
 
 
+#### End of final: testing below ####
+## Tests with out using the tree and data:
+t<-0:100 #This sets the length of time for the simulation / number of generations 
 
+sig2 <- 0.01 #This determines the relative size of jumps on the tree. When sigma squared is small, character changes tend to be smaller. Sigma squared has a maximum of 1, which suggests larger character changes. 
+
+random.deviates.simulation <- rnorm(n=length(t) -1, sd=sqrt(sig2)) #This is the series of character state changes through time
+
+stepwise_values <- numeric() # Generating trait values over time
+stepwise_values[1] <-0 # Each trait value at time t is calculated by adding a change in trait value given in the vector to the trait value at t-1. Character state begins at 0. 
+stepwise_values[2] <- stepwise_values[1] + random.deviates.simulation[1]
+stepwise_values[3] <- stepwise_values[2] + random.deviates.simulation[2]
+stepwise_values[4] <- stepwise_values[3] + random.deviates.simulation[3]
+stepwise_values[5] <- stepwise_values[4] + random.deviates.simulation[4]
+
+
+#Plot the trait values for the first 5 changes in time described above. 
+abs_max <- max(abs(stepwise_values))
+plot(1, stepwise_values[1], 
+     xlim = c(0,5), ylim = c(-abs_max,abs_max),
+     xlab = "t", ylab = "trait value",
+     pch = 20, type = "o")
+
+points(c(2:5), stepwise_values[2:5], pch=20)
+
+lines(1:5, stepwise_values)
+
+# Do this for all the values of x:
+random.deviates.simulation <- c(0, cumsum(random.deviates.simulation))
+plot(t, random.deviates.simulation, type = "l", ylim = c(-3, 3))
+
+# Change the values of t and sigma squared:
+t <- 0:100
+sig2 <- 0.01
+nsim <- 100
+X <- matrix(rnorm(n = nsim * (length(t) - 1), sd = sqrt(sig2)), nsim, length(t) - 1)
+sim_matrix <- cbind(rep(0, nsim), t(apply(X, 1, cumsum))) #matrix of simulations
 
 
 
